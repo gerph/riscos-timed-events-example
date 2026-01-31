@@ -11,6 +11,8 @@
 
 #include "swis.h"
 
+#include "timeouts.h"
+
 #include "VersionNum"
 
 typedef struct pos_s {
@@ -23,7 +25,18 @@ typedef struct pos_s {
 bool quit = false;
 
 int circle_radius = 12;
+int delta = 2;
 uint32_t circle_colour = 0xFFFFFF00; /* White circle */
+
+/* How often the size should change in centiseconds*/
+#define SIZE_CHANGE_CS (15)
+
+/* How often the colour should change in centiseconds*/
+#define COLOUR_CHANGE_CS (150)
+
+/* Maximum/minimum size */
+#define MAX_RADIUS (128)
+#define MIN_RADIUS (8)
 
 /*************************************************** Gerph *********
  Function:      get_mouse_position
@@ -55,16 +68,62 @@ void plot_circle(pos_t *pos, int r, uint32_t colour)
     _swix(OS_Plot, _INR(0,2), PLOT_CIRCLE, pos->x + r, pos->y);
 }
 
+/*************************************************** Gerph *********
+ Function:      change_size
+ Description:   Change the size of the circle
+ Parameters:    private = some private word
+ Returns:       none
+ ******************************************************************/
+void change_size(void *private)
+{
+    circle_radius += delta;
+    if (circle_radius >= MAX_RADIUS ||
+        circle_radius <= MIN_RADIUS)
+        delta = -delta;
+}
+
+/*************************************************** Gerph *********
+ Function:      change_colour
+ Description:   Change the colour of the circle
+ Parameters:    private = some private word
+ Returns:       none
+ ******************************************************************/
+void change_colour(void *private)
+{
+    /* Just do a random thing */
+    long value = rand() & 0xFFFFFF;
+    circle_colour = value << 8;
+}
+
+/*************************************************** Gerph *********
+ Function:      work_loop
+ Description:   Our main work loop that does things
+ Parameters:    none
+ Returns:       none
+ ******************************************************************/
+void work_loop(void)
+{
+    pos_t pos;
+    int32_t buttons = get_mouse_position(&pos);
+    if (buttons)
+        quit = true; /* Exit when the user clicks a button */
+    plot_circle(&pos, circle_radius, circle_colour);
+}
+
 
 int main(int argc, char *argv[])
 {
+    /* Schedule an callback every so often to change the size and colour */
+    TO_SetEvery(change_size, NULL, SIZE_CHANGE_CS);
+    TO_SetEvery(change_colour, NULL, COLOUR_CHANGE_CS);
+
     while (!quit)
     {
-        pos_t pos;
-        int32_t buttons = get_mouse_position(&pos);
-        if (buttons)
-            quit = true; /* Exit when the user clicks a button */
-        plot_circle(&pos, circle_radius, circle_colour);
+        /* Do our normal work */
+        work_loop();
+
+        /* Trigger any timers that need to happen */
+        TO_TriggerTimeouts();
     }
 
     exit(EXIT_SUCCESS);

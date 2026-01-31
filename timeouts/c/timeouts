@@ -1,0 +1,263 @@
+/*******************************************************************
+ * File:     timeouts
+ * Purpose:  Managing and generating timeouts within the <unnamed component>
+ *           - original code written for Nettle
+ * Author:   Justin Fletcher
+ * Date:     27 Mar 2004
+ ******************************************************************/
+
+#include <assert.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+#include "swis.h"
+
+#include "timeouts.h"
+/* Component-specific headers omitted */
+
+/* Define this to debug this file */
+#undef DEBUG
+/* #define DEBUG */
+
+#ifdef DEBUG
+#define dprintf if (1) _swix(0x104,0), printf
+#else
+#define dprintf if (0) _swix(0x104,0), printf
+#endif
+
+typedef struct timer_s timer_t;
+typedef TimeoutCallbackFunction timer_f;
+
+struct timer_s {
+  timer_t *next;           /* pointer to next timer*/
+  unsigned long time;      /* monotonic time for this timer */
+  timer_f func;            /* pointer to function to process this timer */
+  void *private;           /* private value to pass to function */
+  int delay;               /* delay between triggers, or 0 for no retrigger */
+};
+
+static timer_t *list=NULL;
+
+/*************************************************** Gerph *********
+ Function:     TO_newtimer
+ Description:  Internal function to set the timer up.
+ Parameters:   func-> the function to call
+               closure = the private value to pass to the function
+               csecs = the time to delay (centiseconds)
+ Returns:      unique identifier for this timeout, or NULL if failed
+ ******************************************************************/
+static void *TO_newtimer(TimeoutCallbackFunction func,
+                         void *closure,
+                         uint32_t csecs,
+                         uint32_t repeat)
+{
+  unsigned long time;
+  unsigned long now;
+  timer_t *timer = malloc(sizeof(timer_t));
+
+  dprintf("TO_SetTimeout: Set a callback to %p for %i csecs\n", func, csecs);
+
+  /* If we couldn't allocate space, we're screwed */
+  assert(timer != NULL);
+
+  now = clock();
+
+  /* Create the timer structure */
+  timer->time = time = now + csecs;
+  timer->private = closure;
+  timer->delay = repeat; /* in csecs */
+  timer->func = func;
+
+  /* Now link us in to the chain, in the right place */
+  {
+    timer_t **lastp=&list;
+    timer_t *this=list;
+    while (this && this->time < time)
+    {
+      lastp=&this->next;
+      this=this->next;
+    }
+
+    /* We're found our insertion point, between the lastp and this */
+    timer->next = this;
+    *lastp = timer;
+  }
+  return timer;
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_SetEvery
+ Description:  Register a timeout to trigger repeatedly after a number of centiseconds
+ Parameters:   func-> the function to call
+               closure = the private value to pass to the function
+               csecs = the time to delay (centiseconds)
+ Returns:      unique identifier for this timeout, or NULL if failed
+ ******************************************************************/
+void *TO_SetEvery(TimeoutCallbackFunction func,
+                  void *closure,
+                  uint32_t csecs)
+{
+    return TO_newtimer(func, closure, csecs, csecs);
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_SetTimeout
+ Description:  Register a timeout to trigger after a number of milliseconds
+ Parameters:   func-> the function to call
+               closure = the private value to pass to the function
+               csecs = the time to delay (centiseconds)
+ Returns:      unique identifier for this timeout, or NULL if failed
+ ******************************************************************/
+void *TO_SetTimeout(TimeoutCallbackFunction func,
+                    void *closure,
+                    uint32_t csecs)
+{
+    return TO_newtimer(func, closure, csecs, 0);
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_ClearTimeout
+ Description:  Delete a registered timeout from the list
+ Parameters:   timer_id = the identifier to remove
+ Returns:      none
+ ******************************************************************/
+void TO_ClearTimeout(void *timer_id)
+{
+  timer_t **lastp=&list;
+  timer_t *this=list;
+  dprintf("TO_ClearTimeout: Clearing a callback to %p\n",
+          ((timer_t*)timer_id)->func);
+  while (this)
+  {
+    void *next = this->next;
+    if (this == timer_id)
+    {
+      *lastp=next;
+      free(this);
+    }
+    else
+      lastp=&this->next;
+    this=next;
+  }
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_TriggerTimeouts
+ Description:  Trigger the timeouts which are due to go off
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+void TO_TriggerTimeouts(void)
+{
+  unsigned long now;
+
+  dprintf("Triggering timeouts\n");
+
+  /* Because this is an ordered list, we only ever need look at the head */
+  while (list)
+  {
+    timer_t *timer = list;
+
+    int overdue;
+    void *private;
+    timer_f func;
+
+    /* Read the current time, because we may have spent a while in the
+       previous timer routine */
+    now = clock();
+
+    if (now <= timer->time)
+      return; /* Done - no more to do */
+
+    /* Remember details - we may free them in a moment */
+    func = timer->func;
+    private = timer->private;
+    overdue = now - timer->time;
+
+    if (timer->delay == 0)
+    {
+      /* no retrigger, so we unlink and free this block right now */
+      list = timer->next;
+      free(timer);
+    }
+    else
+    {
+      /* We are retriggering; we need to move this block */
+      unsigned long time;
+
+      list = timer->next;
+
+      /* JRF: Consider the implications of :
+                timer->time = time = timer->time + delay
+              (would cause very long delays to have multiple retriggers
+              immediately after the delay was removed, possibly locking
+              the machine for longer... might not be desirable... needs
+              thought)
+       */
+      timer->time = time = now + timer->delay;
+
+      /* NOTE: same code as in timer_add; easier to inline than to make
+               a function */
+      /* Now link us in to the chain, in the right place */
+      {
+        timer_t **lastp=&list;
+        timer_t *this=list;
+        while (this && this->time < time)
+        {
+          lastp=&this->next;
+          this=this->next;
+        }
+
+        /* We're found our insertion point, between the lastp and this */
+        timer->next = this;
+        *lastp = timer;
+      }
+    }
+
+    /* Call the timer callback routine */
+    dprintf("Calling down to %p\n", func);
+    func(private);
+  }
+  dprintf("Timeouts all done\n");
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_NextTimeout
+ Description:  Read the clock() time of the next event in the queue
+ Parameters:   none
+ Returns:      time of next event, or &FFFFFFFF if no others
+ ******************************************************************/
+unsigned long TO_NextTimeout(void)
+{
+  return list ? list->time : 0xffffffff;
+}
+
+/*************************************************** Gerph *********
+ Function:     TO_ShowTimeouts
+ Description:  Display all timers to the file specified
+ Parameters:   f-> the file to write to
+ Returns:      none
+ ******************************************************************/
+void TO_ShowTimeouts(FILE *f)
+{
+  timer_t *this=list;
+
+  fprintf(f,"  Time now : %08x\n", clock());
+  fprintf(f,"Next event : %08lx\n", TO_NextTimeout());
+  fprintf(f,"\n");
+  fprintf(f,"%8s   %8s    %8s   %8s\n",
+            "Time",
+            "Delay",
+            "Private",
+            "Function");
+  while (this)
+  {
+    fprintf(f,"%08lx   %8i    %8p   %8p\n",
+              this->time,
+              this->delay,
+              this->private,
+              this->func);
+    this=this->next;
+  }
+}

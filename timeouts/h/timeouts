@@ -1,0 +1,72 @@
+/*******************************************************************
+ * File:     timeouts
+ * Purpose:  Managing and generating timeouts within the <unnamed component>
+ *           - original code written for Nettle
+ * Author:   Justin Fletcher
+ * Date:     27 Mar 2004
+ ******************************************************************/
+
+#ifndef TIMEOUTS_H
+#define TIMEOUTS_H
+
+#include <stdio.h>
+
+typedef void (*TimeoutCallbackFunction) (void * closure);
+
+/*************************************************** Gerph *********
+ Function:     TO_SetTimeout
+ Description:  Register a timeout to trigger after a number of centiseconds
+ Parameters:   func-> the function to call
+               closure = the private value to pass to the function
+               csecs = the time to delay (centiseconds)
+ Returns:      unique identifier for this timeout, or NULL if failed
+ ******************************************************************/
+void *TO_SetTimeout(TimeoutCallbackFunction func,
+                    void *closure,
+                    uint32_t csecs);
+
+/*************************************************** Gerph *********
+ Function:     TO_SetEvery
+ Description:  Register a timeout to trigger repeatedly after a number of milliseconds
+ Parameters:   func-> the function to call
+               closure = the private value to pass to the function
+               csecs = the time to delay (centiseconds)
+ Returns:      unique identifier for this timeout, or NULL if failed
+ ******************************************************************/
+void *TO_SetEvery(TimeoutCallbackFunction func,
+                  void *closure,
+                  uint32_t csecs);
+
+/*************************************************** Gerph *********
+ Function:     TO_ClearTimeout
+ Description:  Delete a registered timeout from the list
+ Parameters:   timer_id = the identifier to remove
+ Returns:      none
+ ******************************************************************/
+void TO_ClearTimeout(void *timer_id);
+
+/*************************************************** Gerph *********
+ Function:     TO_TriggerTimeouts
+ Description:  Trigger the timeouts which are due to go off
+ Parameters:   none
+ Returns:      none
+ ******************************************************************/
+void TO_TriggerTimeouts(void);
+
+/*************************************************** Gerph *********
+ Function:     TO_NextTimeout
+ Description:  Read the clock() time of the next event in the queue
+ Parameters:   none
+ Returns:      time of next event, or &FFFFFFFF if no others
+ ******************************************************************/
+unsigned long TO_NextTimeout(void);
+
+/*************************************************** Gerph *********
+ Function:     TO_ShowTimeouts
+ Description:  Display all timers to the file specified
+ Parameters:   f-> the file to write to
+ Returns:      none
+ ******************************************************************/
+void TO_ShowTimeouts(FILE *f);
+
+#endif

@@ -29,7 +29,9 @@ The library has a simple interface, which is very similar to what you would find
 libraries providing callbacks. The original code for this library was written for Nettle,
 and subsequently modified to be used within the Mozilla browser.
 
-* `TO_SetTimeout` - sets a timeout to happen in a number of milliseconds. RISC OS actually doesn't have the ability to trigger on millisecond accuracy, but as this interface is usually used for interfacing code with other libraries, this is a useful figure.
+* `TO_SetTimeout` - sets a timeout to happen in a number of centiseconds. The original version of this library used milliseconds, but that's not very friendly.
+
+* `TO_SetEvery` - sets a timeout to happen in a number of centiseconds, and in that number of centiseconds repeatedly.
 
 * `TO_ClearTimeout` - removes a previously set timeout.
 

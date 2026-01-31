@@ -2,6 +2,8 @@
 # Makefile for CLITimers
 #
 
+VPATH = @ timeouts
+
 #
 # Program specific options:
 #
@@ -24,7 +26,7 @@ TYPE       = aif
 
 # Comma-separated list of paths to use for includes, such as:
 #	C:LibName.
-INCLUDES   =
+INCLUDES   = timeouts.
 
 # Space separated list of defines to set, eg -DDEBUG
 CDEFINES   =
@@ -33,7 +35,8 @@ CDEFINES   =
 LIBS       = ${CLIB}
 
 # Objects to build, using the format o.<name> (will be varied for build type)
-OBJS       = o.main
+OBJS       = o.main \
+			 o.timeouts
 
 # Space separated list of XML files for building documentation.
 #DOCSRC = <prm-in-xml-sources>
