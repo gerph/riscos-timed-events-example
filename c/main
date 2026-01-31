@@ -1,0 +1,71 @@
+/*******************************************************************
+ * File:        main
+ * Purpose:     CLITimers command line tool
+ * Author:      Gerph
+ ******************************************************************/
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+
+#include "swis.h"
+
+#include "VersionNum"
+
+typedef struct pos_s {
+    int x, y;
+} pos_t;
+
+#define PLOT_MOVE (4)
+#define PLOT_CIRCLE (152+5)
+
+bool quit = false;
+
+int circle_radius = 12;
+uint32_t circle_colour = 0xFFFFFF00; /* White circle */
+
+/*************************************************** Gerph *********
+ Function:      get_mouse_position
+ Description:   Read the position of the mouse
+ Parameters:    pos-> where to store the position
+ Returns:       buttons pressed
+ ******************************************************************/
+int32_t get_mouse_position(pos_t *pos)
+{
+    int32_t x, y, buttons, t;
+    _swix(OS_Mouse, _OUTR(0,3), &x, &y, &buttons, &t);
+    pos->x = x;
+    pos->y = y;
+    return buttons;
+}
+
+/*************************************************** Gerph *********
+ Function:      plot_circle
+ Description:   Plot a circle at a position, with a given size
+ Parameters:    pos-> where to plot
+                r = radius
+                colour = colour
+ Returns:       none
+ ******************************************************************/
+void plot_circle(pos_t *pos, int r, uint32_t colour)
+{
+    _swix(ColourTrans_SetGCOL, _IN(0)|_INR(3,4), colour, 0, 0);
+    _swix(OS_Plot, _INR(0,2), PLOT_MOVE, pos->x, pos->y);
+    _swix(OS_Plot, _INR(0,2), PLOT_CIRCLE, pos->x + r, pos->y);
+}
+
+
+int main(int argc, char *argv[])
+{
+    while (!quit)
+    {
+        pos_t pos;
+        int32_t buttons = get_mouse_position(&pos);
+        if (buttons)
+            quit = true; /* Exit when the user clicks a button */
+        plot_circle(&pos, circle_radius, circle_colour);
+    }
+
+    exit(EXIT_SUCCESS);
+}
