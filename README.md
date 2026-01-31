@@ -52,3 +52,45 @@ through the loop.
 The timeouts will be used to change the size of the circle on one timed event,
 and to change the colour on another timed event.
 
+When run at the command line, CLITimers will display circles in changing sizes
+and colours, controlled by the timers. Click the mouse to exit.
+
+
+## Example for a wimp application
+
+Wimp applications are slightly different, because they have to interact with other
+applications. Usually you use a Wimp_PollIdle to get called back when there is
+something for the application to do. Adding general timeouts to this process is
+not much more than the command line application.
+
+The `Wimp_Poll` is changed to `Wimp_PollIdle` depending on whether there are timers
+present. When the null poll is received, the timers are triggered, and handle the
+operations. The receipt of the Quit message causes the application to disable the
+first timer, and add another timer that will eventually quit the application.
+
+When run, the WimpTimers tool will play two alternating notes. This will continue
+until the application is quit from the TaskManager. When quit, a descending tone is
+played, on another timer, and finally the application exits.
+
+
+## Other uses of timed events
+
+Whilst the example here uses very simple timers to change behaviour on timers, this
+could just as easily be used to monitor internet or serial connections, or to track
+physical hardware. Animations by moving icons or the window could be handled in the
+same way. Any number of handlers can be registered with this mechanism with no
+additional load on the system except when the timed events are dispatched. In many
+cases it would not be necessary to handle more than a couple of timed events, but
+depending on the use there may be many many more.
+
+In the Wimp example, we could have had the tick and the tock sounds on separate timers, but the likelihood is that these timers would become synchronised (eg if you pressed
+F12), because any delayed timer would end up being triggered as overdue at the same
+time.
+
+
+## Dependencies
+
+Used in this way, there is no other dependence on any other components within the
+system to manage the timed events. The application retains all the information it
+needs to function and does not need to rely on anything other than the standard
+`Wimp_PollIdle` functionality.

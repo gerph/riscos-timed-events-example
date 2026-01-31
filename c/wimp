@@ -1,0 +1,153 @@
+/*******************************************************************
+ * File:        wimp
+ * Purpose:     CLITimers command line tool
+ * Author:      Gerph
+ ******************************************************************/
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
+
+#include "swis.h"
+
+#include "timeouts.h"
+
+#include "VersionNum"
+
+bool quit = false;
+
+
+/* Handle for the tick-tock timer */
+void *to_ticktock;
+bool tick = true; /* Tick is a higher note, Tock is a lower note */
+int tick_tone = 100;
+int tock_tone = 84;
+
+/* Time between tick and tock */
+#define TICK_TOCK_CS (50)
+#define SHUTDOWN_CS (5)
+
+#define MAX_SHUTDOWN_TONE (96)
+#define MIN_SHUTDOWN_TONE (12)
+int shutdown_tone = MAX_SHUTDOWN_TONE; /* The shutdown tone just goes down until it gets very low */
+#define SHUTDOWN_STEP (4)
+
+/*************************************************** Gerph *********
+ Function:      callback_ticktock
+ Description:   Tick-tock callback that plays alternate notes
+ Parameters:    private = private value
+ Returns:       none
+ ******************************************************************/
+void callback_ticktock(void *private)
+{
+    int channel_no = 1;
+    int amplitude = -10;
+    int pitch = tick ? tick_tone : tock_tone;
+    int duration = 5;
+    _swix(Sound_Control, _INR(0,3), channel_no, amplitude, pitch, duration);
+    tick = !tick;
+}
+
+/*************************************************** Gerph *********
+ Function:      callback_shutdown
+ Description:   Shutdown callback that plays descending tones.
+ Parameters:    private = private value
+ Returns:       none
+ ******************************************************************/
+void callback_shutdown(void *private)
+{
+    int channel_no = 1;
+    int amplitude = -10;
+    int pitch = shutdown_tone;
+    int duration = 2;
+    _swix(Sound_Control, _INR(0,3), channel_no, amplitude, pitch, duration);
+    shutdown_tone -= SHUTDOWN_STEP;
+    if (shutdown_tone <= MIN_SHUTDOWN_TONE)
+        quit = true;
+}
+
+/*************************************************** Gerph *********
+ Function:      handle_poll
+ Description:   Handle the results of the Wimp_Poll call
+ Parameters:    reason = the wimp reason code received
+                wimpbuffer-> the buffer from the message
+ Returns:       none
+ ******************************************************************/
+void handle_poll(int reason, int32_t *wimpbuffer)
+{
+    switch (reason)
+    {
+        case 0:
+            /* We got a null poll, so it's safe to trigger any timeouts that are outstanding */
+            TO_TriggerTimeouts();
+            break;
+
+        case 17:
+        case 18:
+            {
+                /* User message */
+                if (wimpbuffer[4] == 0)
+                {
+                    /* We were asked to quit */
+                    TO_ClearTimeout(to_ticktock);
+                    to_ticktock = NULL;
+                    TO_SetEvery(callback_shutdown, NULL, SHUTDOWN_CS);
+                }
+                /* All other messages are ignored */
+                break;
+            }
+    }
+}
+
+
+
+int main(int argc, char *argv[])
+{
+    _kernel_oserror *err;
+    err = _swix(Wimp_Initialise, _INR(0,3), 310, 0x4b534154, "TimerExample", 0);
+    if (err)
+    {
+        printf("Cannot initialise: %s\n", err->errmess);
+        exit(1);
+    }
+
+    to_ticktock = TO_SetEvery(callback_ticktock, NULL, TICK_TOCK_CS);
+
+    while (!quit)
+    {
+        int32_t wimpbuffer[256 / sizeof(int32_t)];
+        int reason;
+        unsigned long nexttime = TO_NextTimeout();
+        if (nexttime == 0xFFFFFFFF)
+        {
+            /* No timeouts registered, so we're just calling Wimp_Poll with no Null events */
+            err = _swix(Wimp_Poll, _INR(0, 3)|_OUT(0), 1, &wimpbuffer, 0, NULL, &reason);
+        }
+        else
+        {
+            /* Call back with null when the monotonic timer reaches the desired time */
+            /* Convert from the clock() time to monotonic time */
+            uint32_t monotime = _swi(OS_ReadMonotonicTime, _RETURN(0));
+            monotime = monotime - clock() + nexttime;
+            err = _swix(Wimp_PollIdle, _INR(0, 3)|_OUT(0), 0, &wimpbuffer, monotime, NULL, &reason);
+        }
+        if (err)
+        {
+            if (to_ticktock)
+            {
+                reason = 18;
+                wimpbuffer[4] = 0;
+            }
+            else
+            {
+                reason = 0;
+            }
+        }
+
+        handle_poll(reason, wimpbuffer);
+    }
+
+    exit(EXIT_SUCCESS);
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env riscos-amu -f
-# Makefile for CLITimers
+# Makefile for WimpTimers
 #
 
 VPATH = @ timeouts
@@ -7,7 +7,7 @@ VPATH = @ timeouts
 #
 # Program specific options:
 #
-COMPONENT  = CLITimers
+COMPONENT  = WimpTimers
 
 # Specifies additional targets for startup
 #INITTARGET = inittarget
@@ -35,8 +35,8 @@ CDEFINES   =
 LIBS       = ${CLIB}
 
 # Objects to build, using the format o.<name> (will be varied for build type)
-OBJS       = o.main \
-			 o.timeouts
+OBJS       = o.wimp \
+             o.timeouts
 
 # Space separated list of XML files for building documentation.
 #DOCSRC = <prm-in-xml-sources>
